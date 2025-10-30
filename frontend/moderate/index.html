@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderation Dashboard</title>
+    <link rel="stylesheet" href="moderate.css">
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div>
+                <h1>🛡️ Moderation Dashboard 🎯</h1>
+                <div class="connection-status">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="connection-status">🔌 Σύνδεση...</span>
+                </div>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="number" id="stat-pending">0</div>
+                    <div class="label">⏳ Εκκρεμείς</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number" id="stat-approved">0</div>
+                    <div class="label">✅ Εγκεκριμένες</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number" id="stat-rejected">0</div>
+                    <div class="label">❌ Απορριφθείσες</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <div class="moderator-section">
+            <div class="section-header">
+                <h2>👤 Στοιχεία Moderator</h2>
+            </div>
+            <div class="moderator-input">
+                <label for="moderator-name">🏷️ Το όνομά σας:</label>
+                <input type="text" id="moderator-name" placeholder="π.χ. Μαρία">
+            </div>
+        </div>
+        <div class="pending-queue" id="pending-queue">
+            <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <h3>Δεν υπάρχουν εκκρεμείς ιστορίες</h3>
+                <p>Νέες υποβολές θα εμφανιστούν εδώ αυτόματα ✨</p>
+                <div class="waiting-emoji">⏳ 🎯 💜 🌟</div>
+            </div>
+        </div>
+    </div>
+    <script src="moderate.js"></script>
+</body>
+</html>

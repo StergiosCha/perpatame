@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Μοιραστείτε την Ιστορία σας</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #6B4C9A;
+            --primary-dark: #4A3570;
+            --accent: #E67E22;
+            --bg: #F8F9FA;
+            --card-bg: #FFFFFF;
+            --text: #2C3E50;
+            --text-light: #7F8C8D;
+            --success: #27AE60;
+            --border: #E0E0E0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container { max-width: 600px; width: 100%; }
+        header { text-align: center; margin-bottom: 40px; }
+        header h1 { color: var(--primary); font-size: 2rem; margin-bottom: 10px; }
+        .subtitle { color: var(--text-light); font-size: 1rem; }
+        #form-container, #success-container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .input-method-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--border);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            font-size: 1rem;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .input-panel { display: none; }
+        .input-panel.active { display: block; }
+        .form-group { margin-bottom: 25px; }
+        label { display: block; margin-bottom: 8px; color: var(--text); font-weight: 500; }
+        textarea, input[type="text"], select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: border-color 0.3s;
+            background: white;
+        }
+        textarea:focus, input[type="text"]:focus, select:focus { outline: none; border-color: var(--primary); }
+        textarea { resize: vertical; min-height: 120px; }
+        .char-count { display: block; text-align: right; font-size: 0.875rem; color: var(--text-light); margin-top: 5px; }
+        .voice-recorder { text-align: center; padding: 30px 0; }
+        .record-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: transform 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+        .record-button:hover { transform: scale(1.05); }
+        .record-button.recording {
+            background: linear-gradient(135deg, #E74C3C, #C0392B);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        .record-text { font-size: 0.75rem; margin-top: 5px; }
+        .recording-status {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--accent);
+        }
+        .pulse-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse-dot 1s infinite;
+        }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .transcription-result { margin-top: 20px; padding: 20px; background: var(--bg); border-radius: 12px; }
+        .transcription-label { font-weight: 600; margin-bottom: 10px; color: var(--primary); }
+        #transcription-text { font-style: italic; color: var(--text); margin-bottom: 15px; }
+        button[type="submit"] {
+            width: 100%;
+            padding: 18px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        button[type="submit"]:hover:not(:disabled) { transform: translateY(-2px); }
+        button[type="submit"]:disabled { opacity: 0.7; cursor: not-allowed; }
+        .secondary-btn {
+            padding: 12px 24px;
+            border: 2px solid var(--primary);
+            border-radius: 8px;
+            background: white;
+            color: var(--primary);
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .secondary-btn:hover { background: var(--primary); color: white; }
+        .hidden { display: none !important; }
+        .success-message { text-align: center; }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--success);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            margin: 0 auto 20px;
+        }
+        .success-message h2 { color: var(--success); margin-bottom: 10px; }
+        .pending-notice {
+            background: #FFF3CD;
+            border: 2px solid #FFC107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+        }
+        .pending-notice strong { display: block; margin-bottom: 5px; }
+        .transformed-story {
+            margin: 30px 0;
+            padding: 25px;
+            background: var(--bg);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+            text-align: left;
+        }
+        .transformed-story .label { font-size: 0.875rem; color: var(--text-light); margin-bottom: 10px; }
+        .transformed-story .story-text { font-size: 1.1rem; font-style: italic; color: var(--text); margin-bottom: 10px; }
+        .transformed-story .author { text-align: right; color: var(--primary); font-weight: 600; }
+        .preview-emojis {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+            font-size: 1.5rem;
+        }
+        .preview-emoji {
+            animation: previewFloat 2s ease-in-out infinite;
+        }
+        @keyframes previewFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+        footer { text-align: center; margin-top: 40px; }
+        .powered-by { color: var(--text-light); font-size: 0.875rem; }
+        .powered-by strong { color: var(--primary); }
+        .header-emoji {
+            font-size: 1.5rem;
+            margin-top: 15px;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💜 Μοιραστείτε την Ιστορία σας</h1>
+            <p class="subtitle">Η ιστορία σας θα εξεταστεί πριν εμφανιστεί στην οθόνη</p>
+            <div class="header-emoji">🌟 ✨ 💪 🎯</div>
+        </header>
+
+        <div id="form-container">
+            <form id="story-form">
+                <div class="input-method-tabs">
+                    <button type="button" class="tab-btn active" data-method="text">✍️ Γράψτε</button>
+                    <button type="button" class="tab-btn" data-method="voice">🎤 Μιλήστε</button>
+                </div>
+
+                <div id="text-input-panel" class="input-panel active">
+                <div class="form-group">
+                    <label for="story-text">📝 Η ιστορία σας *</label>
+                    <textarea id="story-text" name="text" rows="6" placeholder="💭 Πείτε μας την ιστορία σας..." minlength="10"></textarea>
+                    <span class="char-count"><span id="char-count">0</span> / 500</span>
+                </div>
+                </div>
+
+                <div id="voice-input-panel" class="input-panel">
+                    <div class="voice-recorder">
+                        <button type="button" id="record-btn" class="record-button">
+                            <span class="record-icon">🎤</span>
+                            <span class="record-text">Πατήστε για Ηχογράφηση</span>
+                        </button>
+                        <div id="recording-status" class="recording-status hidden">
+                            <div class="pulse-dot"></div>
+                            <span>Ηχογράφηση... <span id="recording-time">0:00</span></span>
+                        </div>
+                        <div id="transcription-result" class="transcription-result hidden">
+                            <p class="transcription-label">Το κείμενό σας:</p>
+                            <p id="transcription-text"></p>
+                            <button type="button" id="retry-record" class="secondary-btn">🔄 Δοκιμάστε ξανά</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="author-name">👤 Το όνομά σας (προαιρετικό)</label>
+                    <input type="text" id="author-name" name="author_name" placeholder="π.χ. Μαρία" maxlength="50">
+                </div>
+
+                <div class="form-group">
+                    <label for="transformation-style">🎨 Στυλ Μετασχηματισμού (προαιρετικό)</label>
+                    <select id="transformation-style" name="transformation_style">
+                        <option value="">🤖 Αυτόματη επιλογή</option>
+                        <option value="inspirational">✨ Εμπνευσμένο - Εστιάζει στην ελπίδα και τη δύναμη</option>
+                        <option value="emotional">💝 Συναισθηματικό - Εστιάζει στο συναίσθημα και την ανθρώπινη εμπειρία</option>
+                        <option value="community">🤝 Κοινότητα - Εστιάζει στην αλληλεγγύη και τη συμπαράσταση</option>
+                        <option value="resilience">💪 Αντοχή - Εστιάζει στην αντοχή και τη δύναμη του πνεύματος</option>
+                    </select>
+                </div>
+
+                <button type="submit" id="submit-btn">
+                    <span id="btn-text">🚀 Υποβολή Ιστορίας</span>
+                    <span id="btn-loader" class="hidden">⏳</span>
+                </button>
+            </form>
+        </div>
+
+        <div id="success-container" class="hidden">
+            <div class="success-message">
+                <div class="success-icon">🎉</div>
+                <h2>Ευχαριστούμε! 💜</h2>
+                <p>Η ιστορία σας υποβλήθηκε επιτυχώς ✨</p>
+                <div class="pending-notice">
+                    <strong>⏳ Εκκρεμής Έγκριση</strong>
+                    Η ιστορία σας θα εξεταστεί και θα εμφανιστεί σύντομα στις οθόνες. 🌟
+                </div>
+                <div id="transformed-preview"></div>
+                <button onclick="location.reload()" class="secondary-btn">🔄 Υποβολή άλλης ιστορίας</button>
+            </div>
+        </div>
+
+        <footer>
+            <p class="powered-by">Powered by <strong>SimasiaAI</strong></p>
+        </footer>
+    </div>
+    <script src="submit.js"></script>
+</body>
+</html>
