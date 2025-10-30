@@ -12,6 +12,8 @@ moderatorInput.addEventListener('change', (e) => {
     localStorage.setItem('moderatorName', moderatorName);
 });
 
+let heartbeatTimer;
+
 function connectWebSocket() {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(`${proto}://${window.location.host}/ws/moderate`);
@@ -22,6 +24,14 @@ function connectWebSocket() {
         connectionStatus.textContent = 'Συνδεδεμένο';
         loadPendingStories();
         loadStats();
+
+        // Heartbeat to keep connection alive behind proxies
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try { ws.send('ping'); } catch (e) { /* no-op */ }
+            }
+        }, 25000);
     };
     
     ws.onmessage = (event) => {
@@ -38,10 +48,11 @@ function connectWebSocket() {
         console.error('WebSocket error:', error);
     };
     
-    ws.onclose = () => {
-        console.log('WebSocket disconnected, reconnecting...');
+    ws.onclose = (ev) => {
+        console.log('WebSocket disconnected, reconnecting...', { code: ev.code, reason: ev.reason });
         statusDot.classList.add('disconnected');
         connectionStatus.textContent = 'Αποσυνδεδεμένο';
+        clearInterval(heartbeatTimer);
         setTimeout(connectWebSocket, 3000);
     };
 }

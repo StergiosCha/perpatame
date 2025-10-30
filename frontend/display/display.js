@@ -13,6 +13,8 @@ function createParticles() {
     }
 }
 
+let heartbeatTimer;
+
 function connectWebSocket() {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(`${proto}://${window.location.host}/ws/display`);
@@ -20,6 +22,13 @@ function connectWebSocket() {
     ws.onopen = () => { 
         console.log('✅ Display WebSocket connected'); 
         loadApprovedStories(); 
+
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try { ws.send('ping'); } catch (e) { /* no-op */ }
+            }
+        }, 25000);
     };
     
     ws.onmessage = (event) => {
@@ -36,8 +45,9 @@ function connectWebSocket() {
         console.error('❌ WebSocket error:', error);
     };
     
-    ws.onclose = () => {
-        console.log('🔌 WebSocket disconnected, reconnecting...');
+    ws.onclose = (ev) => {
+        console.log('🔌 WebSocket disconnected, reconnecting...', { code: ev.code, reason: ev.reason });
+        clearInterval(heartbeatTimer);
         setTimeout(connectWebSocket, 3000);
     };
 }
