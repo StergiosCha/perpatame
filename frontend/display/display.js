@@ -14,7 +14,8 @@ function createParticles() {
 }
 
 function connectWebSocket() {
-    ws = new WebSocket(`ws://${window.location.host}/ws/display`);
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${window.location.host}/ws/display`);
     
     ws.onopen = () => { 
         console.log('✅ Display WebSocket connected'); 

@@ -13,7 +13,8 @@ moderatorInput.addEventListener('change', (e) => {
 });
 
 function connectWebSocket() {
-    ws = new WebSocket(`ws://${window.location.host}/ws/moderate`);
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${window.location.host}/ws/moderate`);
     
     ws.onopen = () => {
         console.log('🛡️ Moderator WebSocket connected');
