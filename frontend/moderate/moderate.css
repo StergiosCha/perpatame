@@ -31,6 +31,31 @@ body {
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
+.logos-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.header-logo {
+    height: 60px;
+    width: auto;
+    object-fit: contain;
+    filter: brightness(1.1);
+    transition: transform 0.3s ease;
+}
+
+.header-logo:hover {
+    transform: scale(1.05);
+}
+
 .header-content {
     max-width: 1400px;
     margin: 0 auto;

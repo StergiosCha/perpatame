@@ -30,6 +30,24 @@
         }
         .container { max-width: 600px; width: 100%; }
         header { text-align: center; margin-bottom: 40px; }
+        .logos-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+        }
+        .header-logo {
+            height: 60px;
+            width: auto;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+        .header-logo:hover {
+            transform: scale(1.05);
+        }
         header h1 { color: var(--primary); font-size: 2rem; margin-bottom: 10px; }
         .subtitle { color: var(--text-light); font-size: 1rem; }
         #form-container, #success-container {
@@ -209,6 +227,10 @@
 <body>
     <div class="container">
         <header>
+            <div class="logos-container">
+                <img src="../assets/ms-federation-logo.png" alt="MS Federation Logo" class="header-logo">
+                <img src="../assets/simasia-logo.png" alt="Simasia AI Logo" class="header-logo">
+            </div>
             <h1>💜 Μοιραστείτε την Ιστορία σας</h1>
             <p class="subtitle">Η ιστορία σας θα εξεταστεί πριν εμφανιστεί στην οθόνη</p>
             <div class="header-emoji">🌟 ✨ 💪 🎯</div>
