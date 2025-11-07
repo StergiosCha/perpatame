@@ -189,9 +189,21 @@ form.addEventListener('submit', async (e) => {
             })
         });
         
-        if (!response.ok) throw new Error('Submission failed');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server error response:', errorText);
+            let errorMessage = 'Submission failed';
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.detail || errorData.error || errorMessage;
+            } catch (e) {
+                errorMessage = errorText || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
         
         const data = await response.json();
+        console.log('Submission successful:', data);
         
         // Add emoji display if available
         let emojiDisplay = '';
@@ -227,7 +239,9 @@ form.addEventListener('submit', async (e) => {
         formContainer.classList.add('hidden');
         successContainer.classList.remove('hidden');
     } catch (err) {
-        alert('Σφάλμα υποβολής.');
+        console.error('Submission error:', err);
+        console.error('Error details:', err.message, err.stack);
+        alert(`Σφάλμα υποβολής: ${err.message || 'Άγνωστο σφάλμα'}`);
         submitBtn.disabled = false;
         btnText.classList.remove('hidden');
         btnLoader.classList.add('hidden');
