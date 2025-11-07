@@ -65,6 +65,27 @@ body {
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
 }
 
+.main-header .logos-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.main-header .header-logo {
+    height: 60px;
+    width: auto;
+    object-fit: contain;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
+}
+
+.main-header .header-logo:hover {
+    opacity: 1;
+}
+
 .header-content {
     max-width: 1400px;
     margin: 0 auto;
