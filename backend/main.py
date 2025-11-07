@@ -23,7 +23,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/assets", StaticFiles(directory="../frontend/assets"), name="assets")
 app.mount("/submit", StaticFiles(directory="../frontend/submit", html=True), name="submit")
 app.mount("/display", StaticFiles(directory="../frontend/display", html=True), name="display")
 app.mount("/moderate", StaticFiles(directory="../frontend/moderate", html=True), name="moderate")
@@ -420,25 +419,25 @@ class StoryTransformer:
             # Paraphrase mode: soften wording, keep meaning and style
             # Still include context for comment generation
             formatted_prompt = (
-                f"ΕΠΕΞΕΡΓΑΣΙΑ ΚΕΙΜΕΝΟΥ - ΔΥΟ ΜΕΡΗ\n\n"
-                f"ΜΕΡΟΣ 1: ΕΠΕΞΕΡΓΑΣΙΑ\n"
-                f"Παραφράσέ το ώστε να αφαιρεθεί ωμή/προσβλητική/βίαιη γλώσσα. Κράτα το νόημα, τη φωνή και το ύφος. ΜΗΝ προσθέτεις νέα γεγονότα.\n\n"
-                f"ΜΕΡΟΣ 2: ΣΧΟΛΙΟ (ΠΑΝΤΑ) - ΠΟΛΥ ΕΝΣΥΝΑΙΣΘΗΤΙΚΟ ΚΑΙ ΠΡΟΣΕΚΤΙΚΟ\n"
-                f"Διάβασε προσεκτικά το κείμενο. Νιώσε το βάθος της εμπειρίας. Απάντησε με ένα σύντομο σχόλιο (1-2 προτάσεις) που:\n"
-                f"- Δείχνει βαθιά ενσυναίσθηση - να νιώθεις μαζί τους, όχι να τους λυπάσαι\n"
-                f"- Είναι ΠΟΛΥ προσεκτικό - αναγνώρισε την εμπειρία με σεβασμό, χωρίς να προσπαθείς να την "φτιάξεις"\n"
-                f"- Μπορεί να συνδέσει με προηγούμενες ιστορίες αν υπάρχει φυσική σύνδεση\n"
-                f"- ΧΩΡΙΣ condescension, χωρίς "θα δεις", "θα καταλάβεις"\n"
-                f"- ΧΩΡΙΣ false optimism - απλά αναγνώρισε και σεβάσου την εμπειρία\n"
-                f"- Να είναι αυθεντικό, σεβαστό, και να δείχνει ότι καταλαβαίνεις\n\n"
-                f"ΣΗΜΑΝΤΙΚΟ: Αναγνώρισε την εμπειρία με σεβασμό. Μην προσπαθείς να την "φτιάξεις" ή να την "βελτιώσεις". Απλά να δείξεις ότι καταλαβαίνεις.\n\n"
-                f"ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ:\n"
-                f"ΕΠΕΞΕΡΓΑΣΜΕΝΟ: [το επεξεργασμένο κείμενο]\n"
-                f"---\n"
-                f"ΣΧΟΛΙΟ: [σχόλιο με βαθιά ενσυναίσθηση, προσεκτικό, σεβαστό]\n\n"
-                f"{context_section}\n"
-                f"Κείμενο: {text.strip()}\n\n"
-                f"Απάντηση:"
+                f'ΕΠΕΞΕΡΓΑΣΙΑ ΚΕΙΜΕΝΟΥ - ΔΥΟ ΜΕΡΗ\n\n'
+                f'ΜΕΡΟΣ 1: ΕΠΕΞΕΡΓΑΣΙΑ\n'
+                f'Παραφράσέ το ώστε να αφαιρεθεί ωμή/προσβλητική/βίαιη γλώσσα. Κράτα το νόημα, τη φωνή και το ύφος. ΜΗΝ προσθέτεις νέα γεγονότα.\n\n'
+                f'ΜΕΡΟΣ 2: ΣΧΟΛΙΟ (ΠΑΝΤΑ) - ΠΟΛΥ ΕΝΣΥΝΑΙΣΘΗΤΙΚΟ ΚΑΙ ΠΡΟΣΕΚΤΙΚΟ\n'
+                f'Διάβασε προσεκτικά το κείμενο. Νιώσε το βάθος της εμπειρίας. Απάντησε με ένα σύντομο σχόλιο (1-2 προτάσεις) που:\n'
+                f'- Δείχνει βαθιά ενσυναίσθηση - να νιώθεις μαζί τους, όχι να τους λυπάσαι\n'
+                f'- Είναι ΠΟΛΥ προσεκτικό - αναγνώρισε την εμπειρία με σεβασμό, χωρίς να προσπαθείς να την "φτιάξεις"\n'
+                f'- Μπορεί να συνδέσει με προηγούμενες ιστορίες αν υπάρχει φυσική σύνδεση\n'
+                f'- ΧΩΡΙΣ condescension, χωρίς "θα δεις", "θα καταλάβεις"\n'
+                f'- ΧΩΡΙΣ false optimism - απλά αναγνώρισε και σεβάσου την εμπειρία\n'
+                f'- Να είναι αυθεντικό, σεβαστό, και να δείχνει ότι καταλαβαίνεις\n\n'
+                f'ΣΗΜΑΝΤΙΚΟ: Αναγνώρισε την εμπειρία με σεβασμό. Μην προσπαθείς να την "φτιάξεις" ή να την "βελτιώσεις". Απλά να δείξεις ότι καταλαβαίνεις.\n\n'
+                f'ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ:\n'
+                f'ΕΠΕΞΕΡΓΑΣΜΕΝΟ: [το επεξεργασμένο κείμενο]\n'
+                f'---\n'
+                f'ΣΧΟΛΙΟ: [σχόλιο με βαθιά ενσυναίσθηση, προσεκτικό, σεβαστό]\n\n'
+                f'{context_section}\n'
+                f'Κείμενο: {text.strip()}\n\n'
+                f'Απάντηση:'
             )
         
         try:
@@ -729,7 +728,7 @@ async def submit_story(submission: StorySubmission):
                 "id": story["id"],
                 "original_text": story["original_text"],
                 "transformed_text": story["transformed_text"],
-                "llm_comment": story.get("llm_comment", ""),
+                "llm_comment": story["llm_comment"] if story["llm_comment"] else "",
                 "author": story["author_name"],
                 "created_at": story["created_at"]
             }
@@ -815,7 +814,7 @@ async def moderate_story(action: ModerationAction):
             "data": {
                 "id": updated_story["id"],
                 "text": updated_story["transformed_text"],
-                "llm_comment": updated_story.get("llm_comment", ""),
+                "llm_comment": updated_story["llm_comment"] if updated_story["llm_comment"] else "",
                 "author": updated_story["author_name"],
                 "created_at": updated_story["created_at"],
                 "emoji_theme_data": emoji_data
