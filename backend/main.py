@@ -728,7 +728,7 @@ async def submit_story(submission: StorySubmission):
                 "id": story["id"],
                 "original_text": story["original_text"],
                 "transformed_text": story["transformed_text"],
-                "llm_comment": story["llm_comment"] if story["llm_comment"] else "",
+                "llm_comment": story.get("llm_comment", ""),
                 "author": story["author_name"],
                 "created_at": story["created_at"]
             }
@@ -814,7 +814,7 @@ async def moderate_story(action: ModerationAction):
             "data": {
                 "id": updated_story["id"],
                 "text": updated_story["transformed_text"],
-                "llm_comment": updated_story["llm_comment"] if updated_story["llm_comment"] else "",
+                "llm_comment": updated_story.get("llm_comment", ""),
                 "author": updated_story["author_name"],
                 "created_at": updated_story["created_at"],
                 "emoji_theme_data": emoji_data
