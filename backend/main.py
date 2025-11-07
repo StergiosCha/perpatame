@@ -22,6 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/assets", StaticFiles(directory="../frontend/assets"), name="assets")
 app.mount("/submit", StaticFiles(directory="../frontend/submit", html=True), name="submit")
 app.mount("/display", StaticFiles(directory="../frontend/display", html=True), name="display")
 app.mount("/moderate", StaticFiles(directory="../frontend/moderate", html=True), name="moderate")
