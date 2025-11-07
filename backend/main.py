@@ -11,6 +11,7 @@ import tempfile
 import speech_recognition as sr
 from pydub import AudioSegment
 import json
+import re
 
 app = FastAPI(title="Story Transformer")
 
@@ -39,6 +40,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             original_text TEXT NOT NULL,
             transformed_text TEXT,
+            llm_comment TEXT,
             author_name TEXT,
             status TEXT DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -48,7 +50,20 @@ def init_db():
             emoji_data TEXT
         )
     ''')
-    conn.commit()
+    
+    # Add llm_comment column if it doesn't exist (migration for existing databases)
+    try:
+        # Check if column exists by trying to select it
+        conn.execute('SELECT llm_comment FROM stories LIMIT 1')
+    except sqlite3.OperationalError:
+        # Column doesn't exist, add it
+        try:
+            conn.execute('ALTER TABLE stories ADD COLUMN llm_comment TEXT')
+            conn.commit()
+            print("✅ Added llm_comment column to stories table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add llm_comment column: {e}")
+    
     conn.close()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -58,65 +73,152 @@ model = genai.GenerativeModel('gemini-2.0-flash-exp')
 class StoryTransformer:
     def __init__(self):
         self.prompts = {
-            'inspirational': """Μετέτρεψε αυτή την προσωπική ιστορία σε ένα εμπνευσμένο, 
-συναισθηματικό μήνυμα 2-3 προτάσεων στα Ελληνικά. 
-Εστίασε στην ελπίδα, τη δύναμη και την αντοχή. Κράτησε το συναίσθημα, κάνε το αισιόδοξο, 
-διατήρησε την ανθρώπινη φωνή, αλλά χωρίς υπερβολές.
+            'inspirational': """ΕΠΕΞΕΡΓΑΣΙΑ ΚΕΙΜΕΝΟΥ - ΔΥΟ ΜΕΡΗ
 
-ΣΗΜΑΝΤΙΚΟ: Αυτή είναι μια εφαρμογή για ιστορίες σχετικές με την Πολλαπλή Σκλήρυνση και την υγεία. 
-Αν το κείμενο είναι ΞΕΚΑΘΑΡΑ άσχετο (π.χ. πολιτικά νέα, οικονομικά, τεχνικά θέματα), 
-επέστρεψε: "Το κείμενο δεν είναι κατάλληλο για μετασχηματισμό. Παρακαλώ εισάγετε μια προσωπική ιστορία."
+ΜΕΡΟΣ 1: ΕΛΑΦΡΥ EDITING
+Κάνε ΜΟΝΟ ορθογραφικές/γραμματικές διορθώσεις. ΚΡΑΤΑ ΑΚΡΙΒΩΣ το ύφος, τη φωνή και όλες τις λέξεις. Αν δεν υπάρχουν λάθη, επέστρεψε το ΑΚΡΙΒΩΣ όπως είναι.
 
-Αλλιώς, μετασχημάτισε το κείμενο σε εμπνευσμένο μήνυμα.
+ΜΕΡΟΣ 2: ΣΧΟΛΙΟ (ΠΑΝΤΑ) - ΠΟΛΥ ΕΝΣΥΝΑΙΣΘΗΤΙΚΟ ΚΑΙ ΠΡΟΣΕΚΤΙΚΟ
+Διάβασε προσεκτικά το κείμενο. Νιώσε το βάθος της εμπειρίας. Απάντησε με ένα σύντομο σχόλιο (1-2 προτάσεις) που:
+- Δείχνει ΑΥΘΕΝΤΙΚΗ ενσυναίσθηση (όχι επιφανειακή)
+- Αναγνωρίζει τη δύναμη και την αντοχή που φαίνεται στο κείμενο
+- Είναι ΠΟΛΥ προσεκτικό με τα συναισθήματα - μην υποτιμάς, μην υπερβάλλεις
+- Μπορεί να συνδέσει με προηγούμενες ιστορίες αν υπάρχει φυσική σύνδεση (π.χ. "Όπως και άλλοι στην κοινότητα μας που μοιράστηκαν παρόμοιες εμπειρίες...")
+- ΧΩΡΙΣ condescension, χωρίς "θα δεις", "θα καταλάβεις", χωρίς να υποτιμάς την εμπειρία
+- ΧΩΡΙΣ να προσπαθείς να "διορθώσεις" ή να "βελτιώσεις" το συναίσθημα
+- Να είναι σεβαστό, αυθεντικό, και να αναγνωρίζει την αξία της εμπειρίας
 
-Πρωτότυπο κείμενο: {text}
+ΣΗΜΑΝΤΙΚΟ: Αν το κείμενο εκφράζει δυσκολία, πόνο, ή αγωνία, αναγνώρισε το. Μην προσπαθείς να το "φτιάξεις" με false optimism. Αναγνώρισε την εμπειρία με σεβασμό.
 
-Μετασχηματισμένο μήνυμα:""",
+ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ:
+ΕΠΕΞΕΡΓΑΣΜΕΝΟ: [το κείμενο με ελάχιστο edit]
+---
+ΣΧΟΛΙΟ: [σχόλιο με βαθιά ενσυναίσθηση, προσεκτικό, σεβαστό]
+
+Αν είναι ΞΕΚΑΘΑΡΑ άσχετο, επέστρεψε: "Το κείμενο δεν είναι κατάλληλο."
+
+{context_section}
+
+Κείμενο: {text}
+
+Απάντηση:""",
             
-            'emotional': """Μετέτρεψε αυτή την προσωπική ιστορία σε ένα συναισθηματικό, 
-εγκάρδιο μήνυμα 2-3 προτάσεων στα Ελληνικά.
-Εστίασε στο συναίσθημα, την ανθρώπινη εμπειρία και τη συμπαράσταση. 
-Διατήρησε την αυθεντικότητα και την ευαισθησία.
+            'emotional': """ΕΠΕΞΕΡΓΑΣΙΑ ΚΕΙΜΕΝΟΥ - ΔΥΟ ΜΕΡΗ
 
-ΣΗΜΑΝΤΙΚΟ: Αυτή είναι μια εφαρμογή για ιστορίες σχετικές με την Πολλαπλή Σκλήρυνση και την υγεία. 
-Αν το κείμενο είναι ΞΕΚΑΘΑΡΑ άσχετο (π.χ. πολιτικά νέα, οικονομικά, τεχνικά θέματα), 
-επέστρεψε: "Το κείμενο δεν είναι κατάλληλο για μετασχηματισμό. Παρακαλώ εισάγετε μια προσωπική ιστορία."
+ΜΕΡΟΣ 1: ΕΛΑΦΡΥ EDITING
+Κάνε ΜΟΝΟ ορθογραφικές/γραμματικές διορθώσεις. ΚΡΑΤΑ ΑΚΡΙΒΩΣ το ύφος, τη φωνή και όλες τις λέξεις. Αν δεν υπάρχουν λάθη, επέστρεψε το ΑΚΡΙΒΩΣ όπως είναι.
 
-Αλλιώς, μετασχημάτισε το κείμενο σε συναισθηματικό μήνυμα.
+ΜΕΡΟΣ 2: ΣΧΟΛΙΟ (ΠΑΝΤΑ) - ΠΟΛΥ ΕΝΣΥΝΑΙΣΘΗΤΙΚΟ ΚΑΙ ΠΡΟΣΕΚΤΙΚΟ
+Διάβασε προσεκτικά το κείμενο. Νιώσε τα συναισθήματα. Απάντησε με ένα σύντομο σχόλιο (1-2 προτάσεις) που:
+- Αναγνωρίζει ΑΚΡΙΒΩΣ τα συναισθήματα που εκφράζονται (χωρίς να τα αλλάζεις)
+- Δείχνει βαθιά ενσυναίσθηση - να νιώθεις μαζί τους, όχι να τους λυπάσαι
+- Είναι ΠΟΛΥ προσεκτικό - μην υποτιμάς, μην υπερβάλλεις, μην προσπαθείς να "διορθώσεις" τα συναισθήματα
+- Μπορεί να συνδέσει με προηγούμενες ιστορίες αν υπάρχει φυσική συναισθηματική σύνδεση
+- ΧΩΡΙΣ condescension, χωρίς "θα δεις", "θα καταλάβεις"
+- ΧΩΡΙΣ να προσπαθείς να "κάνεις το άτομο να νιώσει καλύτερα" - απλά αναγνώρισε και σεβάσου
+- Να είναι αυθεντικό, σεβαστό, και να δείχνει ότι καταλαβαίνεις
 
-Πρωτότυπο κείμενο: {text}
+ΣΗΜΑΝΤΙΚΟ: Αν το κείμενο εκφράζει λύπη, θυμό, φόβο, ή οποιοδήποτε δύσκολο συναίσθημα, ΑΝΑΓΝΩΡΙΣΕ το. Μην προσπαθείς να το "φτιάξεις". Απλά να δείξεις ότι καταλαβαίνεις και σεβάσαι.
 
-Μετασχηματισμένο μήνυμα:""",
+ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ:
+ΕΠΕΞΕΡΓΑΣΜΕΝΟ: [το κείμενο με ελάχιστο edit]
+---
+ΣΧΟΛΙΟ: [σχόλιο με βαθιά ενσυναίσθηση, προσεκτικό, σεβαστό]
+
+Αν είναι ΞΕΚΑΘΑΡΑ άσχετο, επέστρεψε: "Το κείμενο δεν είναι κατάλληλο."
+
+{context_section}
+
+Κείμενο: {text}
+
+Απάντηση:""",
             
-            'community': """Μετέτρεψε αυτή την προσωπική ιστορία σε ένα μήνυμα 
-κοινότητας και αλληλεγγύης 2-3 προτάσεων στα Ελληνικά.
-Εστίασε στη δύναμη της κοινότητας, την αλληλεγγύη και το ότι δεν είμαστε μόνοι.
+            'community': """ΕΠΕΞΕΡΓΑΣΙΑ ΚΕΙΜΕΝΟΥ - ΔΥΟ ΜΕΡΗ
 
-ΣΗΜΑΝΤΙΚΟ: Αυτή είναι μια εφαρμογή για ιστορίες σχετικές με την Πολλαπλή Σκλήρυνση και την υγεία. 
-Αν το κείμενο είναι ΞΕΚΑΘΑΡΑ άσχετο (π.χ. πολιτικά νέα, οικονομικά, τεχνικά θέματα), 
-επέστρεψε: "Το κείμενο δεν είναι κατάλληλο για μετασχηματισμό. Παρακαλώ εισάγετε μια προσωπική ιστορία."
+ΜΕΡΟΣ 1: ΕΛΑΦΡΥ EDITING
+Κάνε ΜΟΝΟ ορθογραφικές/γραμματικές διορθώσεις. ΚΡΑΤΑ ΑΚΡΙΒΩΣ το ύφος, τη φωνή και όλες τις λέξεις. Αν δεν υπάρχουν λάθη, επέστρεψε το ΑΚΡΙΒΩΣ όπως είναι.
 
-Αλλιώς, μετασχημάτισε το κείμενο σε μήνυμα κοινότητας.
+ΜΕΡΟΣ 2: ΣΧΟΛΙΟ (ΠΑΝΤΑ) - ΠΟΛΥ ΕΝΣΥΝΑΙΣΘΗΤΙΚΟ ΚΑΙ ΠΡΟΣΕΚΤΙΚΟ
+Διάβασε προσεκτικά το κείμενο. Απάντησε με ένα σύντομο σχόλιο (1-2 προτάσεις) που:
+- Δείχνει βαθιά ενσυναίσθηση και αναγνώριση της αξίας της κοινότητας
+- Τονίζει την αλληλεγγύη και τη σύνδεση, αλλά με σεβασμό - όχι επιφανειακά
+- Μπορεί να συνδέσει με άλλες ιστορίες της κοινότητας αν υπάρχει φυσική σύνδεση (π.χ. "Όπως και άλλοι στην κοινότητά μας που μοιράστηκαν παρόμοιες εμπειρίες...")
+- Είναι ΠΟΛΥ προσεκτικό - να μην φαίνεται ότι "αναγκάζεις" την έννοια της κοινότητας
+- ΧΩΡΙΣ condescension, χωρίς να υποτιμάς την προσωπική εμπειρία
+- Να είναι αυθεντικό, σεβαστό, και να αναγνωρίζει τόσο την προσωπική όσο και την κοινωνική διάσταση
 
-Πρωτότυπο κείμενο: {text}
+ΣΗΜΑΝΤΙΚΟ: Αν το κείμενο μιλάει για μοναξιά ή απομόνωση, αναγνώρισε το. Μην προσπαθείς να το "φτιάξεις" με false community spirit. Αναγνώρισε την εμπειρία με σεβασμό.
 
-Μετασχηματισμένο μήνυμα:""",
+ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ:
+ΕΠΕΞΕΡΓΑΣΜΕΝΟ: [το κείμενο με ελάχιστο edit]
+---
+ΣΧΟΛΙΟ: [σχόλιο με βαθιά ενσυναίσθηση, προσεκτικό, σεβαστό, με αναγνώριση της κοινότητας]
+
+Αν είναι ΞΕΚΑΘΑΡΑ άσχετο, επέστρεψε: "Το κείμενο δεν είναι κατάλληλο."
+
+{context_section}
+
+Κείμενο: {text}
+
+Απάντηση:""",
             
-            'resilience': """Μετέτρεψε αυτή την προσωπική ιστορία σε ένα μήνυμα 
-αντοχής και δύναμης 2-3 προτάσεων στα Ελληνικά.
-Εστίασε στην αντοχή, τη δύναμη του ανθρώπινου πνεύματος και την ικανότητα να ξεπερνάμε τις δυσκολίες.
+            'resilience': """ΕΠΕΞΕΡΓΑΣΙΑ ΚΕΙΜΕΝΟΥ - ΔΥΟ ΜΕΡΗ
 
-ΣΗΜΑΝΤΙΚΟ: Αυτή είναι μια εφαρμογή για ιστορίες σχετικές με την Πολλαπλή Σκλήρυνση και την υγεία. 
-Αν το κείμενο είναι ΞΕΚΑΘΑΡΑ άσχετο (π.χ. πολιτικά νέα, οικονομικά, τεχνικά θέματα), 
-επέστρεψε: "Το κείμενο δεν είναι κατάλληλο για μετασχηματισμό. Παρακαλώ εισάγετε μια προσωπική ιστορία."
+ΜΕΡΟΣ 1: ΕΛΑΦΡΥ EDITING
+Κάνε ΜΟΝΟ ορθογραφικές/γραμματικές διορθώσεις. ΚΡΑΤΑ ΑΚΡΙΒΩΣ το ύφος, τη φωνή και όλες τις λέξεις. Αν δεν υπάρχουν λάθη, επέστρεψε το ΑΚΡΙΒΩΣ όπως είναι.
 
-Αλλιώς, μετασχημάτισε το κείμενο σε μήνυμα αντοχής.
+ΜΕΡΟΣ 2: ΣΧΟΛΙΟ (ΠΑΝΤΑ) - ΠΟΛΥ ΕΝΣΥΝΑΙΣΘΗΤΙΚΟ ΚΑΙ ΠΡΟΣΕΚΤΙΚΟ
+Διάβασε προσεκτικά το κείμενο. Απάντησε με ένα σύντομο σχόλιο (1-2 προτάσεις) που:
+- Αναγνωρίζει την αντοχή/δύναμη που φαίνεται στο κείμενο, αλλά με σεβασμό - όχι επιφανειακά
+- Δείχνει βαθιά ενσυναίσθηση - να καταλαβαίνεις ότι η αντοχή δεν σημαίνει ότι δεν υπάρχει πόνος
+- Είναι ΠΟΛΥ προσεκτικό - μην υποτιμάς τις δυσκολίες, μην υπερβάλλεις την αντοχή
+- Μπορεί να συνδέσει με άλλες ιστορίες αντοχής αν υπάρχει φυσική σύνδεση
+- ΧΩΡΙΣ condescension, χωρίς "θα δεις", "θα καταλάβεις"
+- ΧΩΡΙΣ να προσπαθείς να "ενθαρρύνεις" με false positivity - απλά αναγνώρισε την αντοχή που ήδη υπάρχει
+- Να είναι αυθεντικό, σεβαστό, και να αναγνωρίζει τόσο τη δύναμη όσο και τις δυσκολίες
 
-Πρωτότυπο κείμενο: {text}
+ΣΗΜΑΝΤΙΚΟ: Αν το κείμενο μιλάει για δυσκολίες, αναγνώρισε τόσο τις δυσκολίες όσο και την αντοχή. Μην προσπαθείς να "φτιάξεις" τις δυσκολίες. Αναγνώρισε την πλήρη εμπειρία με σεβασμό.
 
-Μετασχηματισμένο μήνυμα:"""
+ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ:
+ΕΠΕΞΕΡΓΑΣΜΕΝΟ: [το κείμενο με ελάχιστο edit]
+---
+ΣΧΟΛΙΟ: [σχόλιο με βαθιά ενσυναίσθηση, προσεκτικό, σεβαστό, με αναγνώριση της αντοχής]
+
+Αν είναι ΞΕΚΑΘΑΡΑ άσχετο, επέστρεψε: "Το κείμενο δεν είναι κατάλληλο."
+
+{context_section}
+
+Κείμενο: {text}
+
+Απάντηση:"""
         }
     
+    def is_sensitive_content(self, text: str) -> bool:
+        """Check if content is sensitive and might need light editing for clarity/sensitivity"""
+        t = text.lower()
+        sensitive_keywords = [
+            'αμαξίδιο', 'αναπηρία', 'αναπηρικό', 'άτομο με', 'άτομα με',
+            'διάγνωση', 'ασθένεια', 'νοσεί', 'θεραπεία', 'φάρμακο',
+            'πόνος', 'δυσκολία', 'πρόβλημα', 'δύσκολο', 'δύσκολα',
+            'φοβάμαι', 'φοβία', 'άγχος', 'άγχος', 'στεναχώρια',
+            'μόνος', 'μόνη', 'μοναξιά', 'απομόνωση'
+        ]
+        return any(k in t for k in sensitive_keywords)
+    
+    def is_disturbing(self, text: str) -> bool:
+        """Heuristic check for disturbing/explicit content that should be paraphrased/softened.
+        This is conservative: only clear cases trigger paraphrase mode."""
+        t = text.lower()
+        keywords = [
+            # Greek
+            'αυτοκτον', 'δολοφον', 'βιασ', 'αιμα', 'αίμα', 'βια', 'βία', 'σφαγ', 'κορμι', 'πτώμα',
+            'βρισι', 'κατάρα', 'γαμ', 'πουστ', 'μαλ@@', 'ρεμάλι',
+            # English
+            'suicid', 'murder', 'rape', 'blood', 'kill', 'stab', 'dead body', 'corpse',
+            'fuck', 'shit', 'bitch', 'slur'
+        ]
+        return any(k in t for k in keywords)
+
     def is_relevant_content(self, text: str) -> bool:
         """Check if text is relevant for MS story transformation"""
         # Only reject CLEARLY irrelevant content (news, politics, technical stuff)
@@ -245,7 +347,31 @@ class StoryTransformer:
                 "is_relevant": True
             }
     
-    def generate_enhanced(self, text: str, style: str = None) -> dict:
+    def get_recent_stories_context(self, limit: int = 5) -> str:
+        """Get recent approved stories as context for the LLM"""
+        try:
+            conn = get_db()
+            stories = conn.execute(
+                "SELECT transformed_text, author_name FROM stories WHERE status = 'approved' ORDER BY moderated_at DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+            conn.close()
+            
+            if not stories:
+                return ""
+            
+            context_parts = []
+            for story in stories:
+                author = story['author_name'] or 'Ανώνυμος'
+                text = story['transformed_text']
+                context_parts.append(f"- {author}: \"{text}\"")
+            
+            return "\n".join(context_parts)
+        except Exception as e:
+            print(f"⚠️ Error getting recent stories context: {e}")
+            return ""
+    
+    def generate_enhanced(self, text: str, style: str = None, recent_stories_context: str = None) -> dict:
         """Generate enhanced transformation with quality metrics"""
         analysis = self.analyze_story(text)
         
@@ -262,31 +388,105 @@ class StoryTransformer:
         
         # Choose style based on analysis or user preference
         if not style:
-            style = analysis["suggested_style"]
+            style = analysis.get("suggested_style", "inspirational")
         
+        # Use the selected style prompt - each has different focus but same core rules
         prompt = self.prompts.get(style, self.prompts['inspirational'])
-        formatted_prompt = prompt.format(text=text)
+        
+        # Get recent stories context if not provided
+        if recent_stories_context is None:
+            recent_stories_context = self.get_recent_stories_context(limit=5)
+        
+        # Format context section
+        if recent_stories_context:
+            context_section = f"ΠΡΟΗΓΟΥΜΕΝΕΣ ΙΣΤΟΡΙΕΣ (για context):\n{recent_stories_context}\n"
+        else:
+            context_section = ""
+        
+        # Check if content is sensitive - if not, emphasize even more minimal editing
+        is_sensitive = self.is_sensitive_content(text)
+        if not is_sensitive:
+            # For non-sensitive content, be even more conservative
+            prompt = prompt.replace("ΕΛΑΦΡΥ EDITING (μόνο αν χρειάζεται):", 
+                                   "ΕΛΑΦΡΥ EDITING (ΜΟΝΟ αν υπάρχουν σαφή γραμματικά/ορθογραφικά λάθη):")
+            prompt = prompt.replace("Κάνε ΜΟΝΟ ελαφρύ editing αν το περιεχόμενο είναι ευαίσθητο ή χρειάζεται βελτίωση.",
+                                   "Κάνε ΜΟΝΟ ελαφρύ editing αν υπάρχουν σαφή γραμματικά/ορθογραφικά λάθη. Αν το κείμενο είναι ήδη σωστό, επέστρεψε το ΑΚΡΙΒΩΣ όπως είναι.")
+        
+        formatted_prompt = prompt.format(text=text, context_section=context_section)
+
+        # Only special handling for disturbing content - needs soft paraphrasing
+        disturbing = self.is_disturbing(text)
+        if disturbing:
+            # Paraphrase mode: soften wording, keep meaning and style
+            # Still include context for comment generation
+            formatted_prompt = (
+                f"ΕΠΕΞΕΡΓΑΣΙΑ ΚΕΙΜΕΝΟΥ - ΔΥΟ ΜΕΡΗ\n\n"
+                f"ΜΕΡΟΣ 1: ΕΠΕΞΕΡΓΑΣΙΑ\n"
+                f"Παραφράσέ το ώστε να αφαιρεθεί ωμή/προσβλητική/βίαιη γλώσσα. Κράτα το νόημα, τη φωνή και το ύφος. ΜΗΝ προσθέτεις νέα γεγονότα.\n\n"
+                f"ΜΕΡΟΣ 2: ΣΧΟΛΙΟ (ΠΑΝΤΑ) - ΠΟΛΥ ΕΝΣΥΝΑΙΣΘΗΤΙΚΟ ΚΑΙ ΠΡΟΣΕΚΤΙΚΟ\n"
+                f"Διάβασε προσεκτικά το κείμενο. Νιώσε το βάθος της εμπειρίας. Απάντησε με ένα σύντομο σχόλιο (1-2 προτάσεις) που:\n"
+                f"- Δείχνει βαθιά ενσυναίσθηση - να νιώθεις μαζί τους, όχι να τους λυπάσαι\n"
+                f"- Είναι ΠΟΛΥ προσεκτικό - αναγνώρισε την εμπειρία με σεβασμό, χωρίς να προσπαθείς να την "φτιάξεις"\n"
+                f"- Μπορεί να συνδέσει με προηγούμενες ιστορίες αν υπάρχει φυσική σύνδεση\n"
+                f"- ΧΩΡΙΣ condescension, χωρίς "θα δεις", "θα καταλάβεις"\n"
+                f"- ΧΩΡΙΣ false optimism - απλά αναγνώρισε και σεβάσου την εμπειρία\n"
+                f"- Να είναι αυθεντικό, σεβαστό, και να δείχνει ότι καταλαβαίνεις\n\n"
+                f"ΣΗΜΑΝΤΙΚΟ: Αναγνώρισε την εμπειρία με σεβασμό. Μην προσπαθείς να την "φτιάξεις" ή να την "βελτιώσεις". Απλά να δείξεις ότι καταλαβαίνεις.\n\n"
+                f"ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ:\n"
+                f"ΕΠΕΞΕΡΓΑΣΜΕΝΟ: [το επεξεργασμένο κείμενο]\n"
+                f"---\n"
+                f"ΣΧΟΛΙΟ: [σχόλιο με βαθιά ενσυναίσθηση, προσεκτικό, σεβαστό]\n\n"
+                f"{context_section}\n"
+                f"Κείμενο: {text.strip()}\n\n"
+                f"Απάντηση:"
+            )
         
         try:
+            # First attempt
             response = model.generate_content(formatted_prompt)
-            transformed = response.text.strip()
-            
+            full_response = response.text.strip()
+
             # Check if AI refused to transform
-            if "δεν είναι κατάλληλο" in transformed.lower():
+            if "δεν είναι κατάλληλο" in full_response.lower():
                 return {
-                    "transformed_text": transformed,
+                    "transformed_text": full_response,
+                    "llm_comment": "",
                     "style_used": style,
                     "quality_score": 0.0,
                     "analysis": analysis,
                     "success": False,
                     "error": "AI rejected transformation"
                 }
+
+            # Parse the response to separate edited text and comment
+            transformed_text = ""
+            llm_comment = ""
             
-            # Quality metrics
-            quality_score = self.assess_quality(text, transformed)
-            
+            # Look for the separator pattern
+            if "---" in full_response or "ΣΧΟΛΙΟ:" in full_response:
+                parts = re.split(r'---|ΣΧΟΛΙΟ:', full_response, maxsplit=1)
+                if len(parts) >= 1:
+                    # Extract edited text (remove "ΕΠΕΞΕΡΓΑΣΜΕΝΟ:" prefix if present)
+                    edited_part = parts[0].strip()
+                    if "ΕΠΕΞΕΡΓΑΣΜΕΝΟ:" in edited_part:
+                        edited_part = edited_part.split("ΕΠΕΞΕΡΓΑΣΜΕΝΟ:", 1)[1].strip()
+                    transformed_text = edited_part
+                
+                if len(parts) >= 2:
+                    # Extract comment
+                    comment_part = parts[1].strip()
+                    llm_comment = comment_part
+            else:
+                # Fallback: if no separator, treat entire response as edited text
+                transformed_text = full_response
+                llm_comment = ""
+
+            # Quality & fidelity check (just for monitoring, not for retry)
+            quality_score = self.assess_quality(text, transformed_text)
+
             return {
-                "transformed_text": transformed,
+                "transformed_text": transformed_text,
+                "llm_comment": llm_comment,
                 "style_used": style,
                 "quality_score": quality_score,
                 "analysis": analysis,
@@ -297,6 +497,7 @@ class StoryTransformer:
             # Fallback to original text
             return {
                 "transformed_text": "⚠️ Σφάλμα μετασχηματισμού. Παρακαλώ δοκιμάστε ξανά.",
+                "llm_comment": "",
                 "style_used": "fallback",
                 "quality_score": 0.0,
                 "analysis": analysis,
@@ -306,19 +507,36 @@ class StoryTransformer:
     
     def assess_quality(self, original: str, transformed: str) -> float:
         """Assess quality of transformation (0-1)"""
-        # Simple quality metrics
+        # Simple quality + fidelity metrics (token overlap)
+        def tokenize(text: str) -> set:
+            import re
+            # Use Unicode-aware word matching without \p classes (not supported by re)
+            tokens = re.findall(r"[\w']+", text.lower(), flags=re.UNICODE)
+            stop = {
+                'και','το','τα','τι','να','που','σε','στη','στην','στο','στον','για','με','από','δε','δεν','μη','μην','είναι','ή','θα','ως','ως','ένα','μία','μια','ο','η','οι','των','των'
+            }
+            return {t for t in tokens if t not in stop and len(t) > 2}
+
+        orig = tokenize(original)
+        trans = tokenize(transformed)
+        overlap = len(orig & trans) / max(len(orig) or 1, 1)
+
         length_ratio = len(transformed) / max(len(original), 1)
-        has_emotion = any(word in transformed.lower() for word in ['ελπίδα', 'δύναμη', 'αντοχή', 'αγάπη', 'υποστήριξη'])
         is_appropriate_length = 50 <= len(transformed) <= 300
-        
+
         score = 0.0
-        if 0.3 <= length_ratio <= 1.5:  # Reasonable length ratio
+        # Fidelity contributes most
+        if overlap >= 0.15:
+            score += 0.5
+        elif overlap >= 0.08:
             score += 0.3
-        if has_emotion:
-            score += 0.4
+
+        # Length sanity
+        if 0.3 <= length_ratio <= 1.5:
+            score += 0.25
         if is_appropriate_length:
-            score += 0.3
-            
+            score += 0.25
+
         return min(score, 1.0)
 
 transformer = StoryTransformer()
@@ -465,6 +683,7 @@ async def submit_story(submission: StorySubmission):
     try:
         result = transformer.generate_enhanced(submission.text, submission.transformation_style)
         transformed = result["transformed_text"]
+        llm_comment = result.get("llm_comment", "")
         quality_score = result["quality_score"]
         style_used = result["style_used"]
         
@@ -477,6 +696,7 @@ async def submit_story(submission: StorySubmission):
                 "success": False,
                 "error": transformed,
                 "transformed_text": transformed,
+                "llm_comment": llm_comment,
                 "status": "rejected"
             }
         
@@ -493,8 +713,8 @@ async def submit_story(submission: StorySubmission):
         emoji_data_json = json.dumps(emoji_theme)
         
         cursor = conn.execute(
-            "INSERT INTO stories (original_text, transformed_text, author_name, status, emoji_theme, emoji_data) VALUES (?, ?, ?, 'pending', ?, ?)",
-            (submission.text, transformed, submission.author_name, emoji_theme['theme'], emoji_data_json)
+            "INSERT INTO stories (original_text, transformed_text, llm_comment, author_name, status, emoji_theme, emoji_data) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+            (submission.text, transformed, llm_comment, submission.author_name, emoji_theme['theme'], emoji_data_json)
         )
         story_id = cursor.lastrowid
         conn.commit()
@@ -509,6 +729,7 @@ async def submit_story(submission: StorySubmission):
                 "id": story["id"],
                 "original_text": story["original_text"],
                 "transformed_text": story["transformed_text"],
+                "llm_comment": story.get("llm_comment", ""),
                 "author": story["author_name"],
                 "created_at": story["created_at"]
             }
@@ -518,6 +739,7 @@ async def submit_story(submission: StorySubmission):
             "success": True, 
             "id": story_id, 
             "transformed_text": transformed,
+            "llm_comment": llm_comment,
             "status": "pending_moderation",
             "emoji_theme": emoji_theme
         }
@@ -529,7 +751,7 @@ async def submit_story(submission: StorySubmission):
 async def get_stories(limit: int = 50):
     conn = get_db()
     stories = conn.execute(
-        "SELECT id, transformed_text, author_name, created_at, emoji_theme, emoji_data FROM stories WHERE status = 'approved' ORDER BY moderated_at DESC LIMIT ?",
+        "SELECT id, transformed_text, llm_comment, author_name, created_at, emoji_theme, emoji_data FROM stories WHERE status = 'approved' ORDER BY moderated_at DESC LIMIT ?",
         (limit,)
     ).fetchall()
     conn.close()
@@ -551,7 +773,7 @@ async def get_stories(limit: int = 50):
 async def get_pending_stories():
     conn = get_db()
     stories = conn.execute(
-        "SELECT id, original_text, transformed_text, author_name, created_at FROM stories WHERE status = 'pending' ORDER BY created_at ASC"
+        "SELECT id, original_text, transformed_text, llm_comment, author_name, created_at FROM stories WHERE status = 'pending' ORDER BY created_at ASC"
     ).fetchall()
     conn.close()
     return [dict(row) for row in stories]
@@ -593,6 +815,7 @@ async def moderate_story(action: ModerationAction):
             "data": {
                 "id": updated_story["id"],
                 "text": updated_story["transformed_text"],
+                "llm_comment": updated_story.get("llm_comment", ""),
                 "author": updated_story["author_name"],
                 "created_at": updated_story["created_at"],
                 "emoji_theme_data": emoji_data
@@ -655,6 +878,7 @@ async def preview_transformation(submission: StorySubmission):
         result = transformer.generate_enhanced(submission.text, submission.transformation_style)
         return {
             "transformed_text": result["transformed_text"],
+            "llm_comment": result.get("llm_comment", ""),
             "style_used": result["style_used"],
             "quality_score": result["quality_score"],
             "analysis": result["analysis"],

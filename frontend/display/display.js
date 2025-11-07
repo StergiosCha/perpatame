@@ -107,6 +107,7 @@ function addStoryCard(story, animate = true) {
     
     const authorName = story.author_name || story.author || 'Ανώνυμος';
     const storyText = story.transformed_text || story.text || 'Κείμενο μη διαθέσιμο';
+    const llmComment = story.llm_comment || '';
     
     // Get emoji theme data
     let emojiDisplay = '';
@@ -122,6 +123,17 @@ function addStoryCard(story, animate = true) {
         `;
     }
     
+    // Comment display
+    let commentDisplay = '';
+    if (llmComment && llmComment.trim()) {
+        commentDisplay = `
+            <div class="llm-comment-section">
+                <p class="comment-label">💬 Σχόλιο:</p>
+                <p class="comment-text">${llmComment}</p>
+            </div>
+        `;
+    }
+    
     card.innerHTML = `
         <div class="story-header">
             <div class="story-author">${authorName}</div>
@@ -129,6 +141,7 @@ function addStoryCard(story, animate = true) {
         </div>
         ${emojiDisplay}
         <div class="story-text">${storyText}</div>
+        ${commentDisplay}
     `;
     
     storiesContainer.insertBefore(card, storiesContainer.firstChild);

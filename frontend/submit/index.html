@@ -30,32 +30,6 @@
         }
         .container { max-width: 600px; width: 100%; }
         header { text-align: center; margin-bottom: 40px; }
-        .logos-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 30px;
-            margin-bottom: 20px;
-            padding: 20px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid var(--border);
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-        .header-logo {
-            height: 60px;
-            width: auto;
-            object-fit: contain;
-            transition: transform 0.3s ease;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-        }
-        .header-logo:last-child {
-            height: 80px;
-        }
-        .header-logo:hover {
-            transform: scale(1.05);
-        }
         header h1 { color: var(--primary); font-size: 2rem; margin-bottom: 10px; }
         .subtitle { color: var(--text-light); font-size: 1rem; }
         #form-container, #success-container {
@@ -203,6 +177,26 @@
         .transformed-story .label { font-size: 0.875rem; color: var(--text-light); margin-bottom: 10px; }
         .transformed-story .story-text { font-size: 1.1rem; font-style: italic; color: var(--text); margin-bottom: 10px; }
         .transformed-story .author { text-align: right; color: var(--primary); font-weight: 600; }
+        .llm-comment-section {
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 2px solid var(--border);
+        }
+        .llm-comment-section .comment-label {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .llm-comment-section .comment-text {
+            font-size: 1rem;
+            color: var(--text);
+            line-height: 1.6;
+            padding: 15px;
+            background: #F0F4F8;
+            border-radius: 8px;
+            border-left: 3px solid var(--accent);
+        }
         .preview-emojis {
             display: flex;
             justify-content: center;
@@ -220,6 +214,30 @@
         footer { text-align: center; margin-top: 40px; }
         .powered-by { color: var(--text-light); font-size: 0.875rem; }
         .powered-by strong { color: var(--primary); }
+        .logos-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .logo {
+            height: 50px;
+            width: auto;
+            object-fit: contain;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+        .logo:hover {
+            opacity: 1;
+        }
+        .ms-logo {
+            max-height: 60px;
+        }
+        .simasia-logo {
+            max-height: 50px;
+        }
         .header-emoji {
             font-size: 1.5rem;
             margin-top: 15px;
@@ -235,10 +253,6 @@
 <body>
     <div class="container">
         <header>
-            <div class="logos-container">
-                <img src="/assets/ms-federation-logo.png" alt="MS Federation Logo" class="header-logo">
-                <img src="/assets/simasia-logo.png" alt="Simasia AI Logo" class="header-logo">
-            </div>
             <h1>💜 Μοιραστείτε την Ιστορία σας</h1>
             <p class="subtitle">Η ιστορία σας θα εξεταστεί πριν εμφανιστεί στην οθόνη</p>
             <div class="header-emoji">🌟 ✨ 💪 🎯</div>
@@ -315,6 +329,10 @@
         </div>
 
         <footer>
+            <div class="logos-container">
+                <img src="/assets/ms-federation-logo.png" alt="Πανελλήνια Ομοσπονδία Ατόμων με Σκλήρυνση κατά Πλάκας" class="logo ms-logo">
+                <img src="/assets/simasia-logo.png" alt="SimasiaAI" class="logo simasia-logo">
+            </div>
             <p class="powered-by">Powered by <strong>SimasiaAI</strong></p>
         </footer>
     </div>

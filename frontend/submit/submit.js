@@ -46,8 +46,33 @@ retryBtn.addEventListener('click', () => {
 });
 
 async function startRecording() {
+    console.log('Starting recording...', {
+        hasMediaDevices: !!navigator.mediaDevices,
+        hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
+        protocol: window.location.protocol,
+        host: window.location.host
+    });
+
+    // Get getUserMedia with fallback for older browsers
+    const getUserMedia = navigator.mediaDevices?.getUserMedia 
+        || navigator.getUserMedia 
+        || navigator.webkitGetUserMedia 
+        || navigator.mozGetUserMedia 
+        || navigator.msGetUserMedia;
+
+    if (!getUserMedia) {
+        console.error('No getUserMedia support found');
+        alert('Το browser σας δεν υποστηρίζει ηχογράφηση. Χρησιμοποιήστε Chrome, Firefox ή Safari.');
+        return;
+    }
+
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Use modern API if available, otherwise legacy
+        const stream = navigator.mediaDevices 
+            ? await navigator.mediaDevices.getUserMedia({ audio: true })
+            : await new Promise((resolve, reject) => {
+                getUserMedia.call(navigator, { audio: true }, resolve, reject);
+            });
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
         
@@ -69,7 +94,18 @@ async function startRecording() {
         recordingStartTime = Date.now();
         recordingInterval = setInterval(updateRecordingTime, 100);
     } catch (err) {
-        alert('Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο.');
+        console.error('Microphone error:', err);
+        let errorMsg = 'Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο.';
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            errorMsg = 'Παρακαλώ επιτρέψτε την πρόσβαση στο μικρόφωνο στις ρυθμίσεις του browser.';
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            errorMsg = 'Δεν βρέθηκε μικρόφωνο. Ελέγξτε τις συνδέσεις.';
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            errorMsg = 'Το μικρόφωνο χρησιμοποιείται από άλλη εφαρμογή.';
+        }
+        alert(errorMsg);
+        recordBtn.classList.remove('recording');
+        recordingStatus.classList.add('hidden');
     }
 }
 
@@ -168,12 +204,23 @@ form.addEventListener('submit', async (e) => {
             `;
         }
         
+        let commentDisplay = '';
+        if (data.llm_comment && data.llm_comment.trim()) {
+            commentDisplay = `
+                <div class="llm-comment-section">
+                    <p class="comment-label">💬 Σχόλιο:</p>
+                    <p class="comment-text">${data.llm_comment}</p>
+                </div>
+            `;
+        }
+        
         transformedPreview.innerHTML = `
             <div class="transformed-story">
                 <p class="label">Η μετασχηματισμένη ιστορία σας:</p>
                 ${emojiDisplay}
                 <p class="story-text">"${data.transformed_text}"</p>
                 ${authorName ? `<p class="author">- ${authorName}</p>` : ''}
+                ${commentDisplay}
             </div>
         `;
         

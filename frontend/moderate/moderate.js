@@ -124,6 +124,13 @@ function addStoryCard(story) {
             <div class="story-text transformed">${story.transformed_text}</div>
         </div>
         
+        ${story.llm_comment && story.llm_comment.trim() ? `
+        <div class="story-section">
+            <div class="story-section-title">💬 Σχόλιο</div>
+            <div class="story-text comment">${story.llm_comment}</div>
+        </div>
+        ` : ''}
+        
         <div class="action-buttons">
             <button class="btn btn-approve" onclick="moderateStory(${story.id}, 'approve')">
                 ✓ Έγκριση
