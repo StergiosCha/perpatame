@@ -65,8 +65,67 @@ def init_db():
     
     conn.close()
 
+# Configure Gemini with fallback models (from MEDEA paper branch)
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+# Model fallback chain (best to worst) - NO experimental models
+MODEL_NAMES = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+]
+
+# Initialize models
+models = []
+for model_name in MODEL_NAMES:
+    try:
+        m = genai.GenerativeModel(model_name)
+        models.append((model_name, m))
+        print(f"✅ Loaded model: {model_name}")
+    except Exception as e:
+        print(f"⚠️ Failed to load model {model_name}: {e}")
+
+if not models:
+    print("❌ ERROR: No Gemini models could be loaded!")
+else:
+    print(f"✅ Initialized with {len(models)} models")
+
+def generate_with_fallback(prompt: str, temperature: float = 0.2, max_tokens: int = 1024) -> str:
+    """Generate content with automatic model fallbacks"""
+    if not models:
+        raise Exception("No models available for generation")
+    
+    last_error = None
+    
+    # Try each model in the fallback chain
+    for model_name, model in models:
+        for attempt in range(3):  # 3 retries per model
+            try:
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=max_tokens
+                    )
+                )
+                
+                if response.text and response.text.strip():
+                    print(f"✅ Success with {model_name}")
+                    return response.text.strip()
+                else:
+                    print(f"⚠️ Empty response from {model_name}")
+                    continue
+                    
+            except Exception as e:
+                print(f"⚠️ {model_name} attempt {attempt + 1} failed: {e}")
+                last_error = e
+                continue
+    
+    # All models failed
+    raise Exception(f"All LLM models failed. Last error: {last_error}")
 
 # Enhanced AI Generation Features
 class StoryTransformer:
@@ -322,10 +381,10 @@ class StoryTransformer:
 Κείμενο: {text[:200]}..."""
         
         try:
-            response = model.generate_content(analysis_prompt)
+            response_text = generate_with_fallback(analysis_prompt, temperature=0.1)
             # Try to parse JSON response
             try:
-                result = json.loads(response.text)
+                result = json.loads(response_text)
                 result['is_relevant'] = True
                 return result
             except:
@@ -442,9 +501,8 @@ class StoryTransformer:
             )
         
         try:
-            # First attempt
-            response = model.generate_content(formatted_prompt)
-            full_response = response.text.strip()
+            # First attempt with fallback
+            full_response = generate_with_fallback(formatted_prompt, temperature=0.2)
 
             # Check if AI refused to transform
             if "δεν είναι κατάλληλο" in full_response.lower():
