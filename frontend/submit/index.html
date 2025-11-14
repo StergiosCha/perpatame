@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Μοιραστείτε την Ιστορία σας</title>
+    <title>Μοιραστείτε την Ιστορία/Σχόλιό σας</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
@@ -254,8 +254,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>💜 Μοιραστείτε την Ιστορία σας</h1>
-            <p class="subtitle">Η ιστορία σας θα εξεταστεί πριν εμφανιστεί στην οθόνη</p>
+            <h1>💜 Μοιραστείτε την Ιστορία/Σχόλιό σας</h1>
+            <p class="subtitle">Η ιστορία/το σχόλιό σας θα εξεταστεί πριν εμφανιστεί στην οθόνη</p>
             <div class="header-emoji">🌟 ✨ 💪 🎯</div>
         </header>
 
@@ -268,8 +268,8 @@
 
                 <div id="text-input-panel" class="input-panel active">
                 <div class="form-group">
-                    <label for="story-text">📝 Η ιστορία σας *</label>
-                    <textarea id="story-text" name="text" rows="6" placeholder="💭 Πείτε μας την ιστορία σας..." minlength="10"></textarea>
+                    <label for="story-text">📝 Η ιστορία/το σχόλιό σας *</label>
+                    <textarea id="story-text" name="text" rows="6" placeholder="💭 Πείτε μας την ιστορία/το σχόλιό σας..." minlength="10"></textarea>
                     <span class="char-count"><span id="char-count">0</span> / 500</span>
                 </div>
                 </div>
@@ -309,7 +309,7 @@
                 </div>
 
                 <button type="submit" id="submit-btn">
-                    <span id="btn-text">🚀 Υποβολή Ιστορίας</span>
+                    <span id="btn-text">🚀 Υποβολή Ιστορίας/Σχολίου</span>
                     <span id="btn-loader" class="hidden">⏳</span>
                 </button>
             </form>
@@ -319,13 +319,13 @@
             <div class="success-message">
                 <div class="success-icon">🎉</div>
                 <h2>Ευχαριστούμε! 💜</h2>
-                <p>Η ιστορία σας υποβλήθηκε επιτυχώς ✨</p>
+                <p>Η ιστορία/το σχόλιό σας υποβλήθηκε επιτυχώς ✨</p>
                 <div class="pending-notice">
                     <strong>⏳ Εκκρεμής Έγκριση</strong>
-                    Η ιστορία σας θα εξεταστεί και θα εμφανιστεί σύντομα στις οθόνες. 🌟
+                    Η ιστορία/το σχόλιό σας θα εξεταστεί και θα εμφανιστεί σύντομα στις οθόνες. 🌟
                 </div>
                 <div id="transformed-preview"></div>
-                <button onclick="location.reload()" class="secondary-btn">🔄 Υποβολή άλλης ιστορίας</button>
+                <button onclick="location.reload()" class="secondary-btn">🔄 Υποβολή άλλης ιστορίας/σχολίου</button>
             </div>
         </div>
 

@@ -167,7 +167,7 @@ form.addEventListener('submit', async (e) => {
     }
     
     if (!storyText || storyText.length < 10) {
-        alert('Παρακαλώ γράψτε ή ηχογραφήστε την ιστορία σας');
+        alert('Παρακαλώ γράψτε ή ηχογραφήστε την ιστορία/το σχόλιό σας');
         return;
     }
     
@@ -228,7 +228,7 @@ form.addEventListener('submit', async (e) => {
         
         transformedPreview.innerHTML = `
             <div class="transformed-story">
-                <p class="label">Η μετασχηματισμένη ιστορία σας:</p>
+                <p class="label">Η μετασχηματισμένη ιστορία/το σχόλιό σας:</p>
                 ${emojiDisplay}
                 <p class="story-text">"${data.transformed_text}"</p>
                 ${authorName ? `<p class="author">- ${authorName}</p>` : ''}
