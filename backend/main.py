@@ -12,6 +12,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import json
 import re
+from pathlib import Path
 
 app = FastAPI(title="Story Transformer")
 
@@ -23,9 +24,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/submit", StaticFiles(directory="../frontend/submit", html=True), name="submit")
-app.mount("/display", StaticFiles(directory="../frontend/display", html=True), name="display")
-app.mount("/moderate", StaticFiles(directory="../frontend/moderate", html=True), name="moderate")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = ROOT_DIR / "frontend"
+
+app.mount("/submit", StaticFiles(directory=str(FRONTEND_DIR / "submit"), html=True), name="submit")
+app.mount("/display", StaticFiles(directory=str(FRONTEND_DIR / "display"), html=True), name="display")
+app.mount("/moderate", StaticFiles(directory=str(FRONTEND_DIR / "moderate"), html=True), name="moderate")
 
 def get_db():
     conn = sqlite3.connect('stories.db', check_same_thread=False)
@@ -754,8 +758,9 @@ async def submit_story(submission: StorySubmission):
                 "success": False,
                 "error": transformed,
                 "transformed_text": transformed,
-                "llm_comment": llm_comment,
-                "status": "rejected"
+                "status": "rejected",
+                "author_name": submission.author_name or None,
+                "transformation_style": style_used
             }
         
     except Exception as e:
@@ -794,12 +799,13 @@ async def submit_story(submission: StorySubmission):
         })
         
         return {
-            "success": True, 
-            "id": story_id, 
+            "success": True,
+            "id": story_id,
             "transformed_text": transformed,
-            "llm_comment": llm_comment,
             "status": "pending_moderation",
-            "emoji_theme": emoji_theme
+            "emoji_theme": emoji_theme,
+            "author_name": story["author_name"],
+            "transformation_style": style_used
         }
     except Exception as e:
         print(f"❌ Database error: {e}")

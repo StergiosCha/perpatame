@@ -216,23 +216,14 @@ form.addEventListener('submit', async (e) => {
             `;
         }
         
-        let commentDisplay = '';
-        if (data.llm_comment && data.llm_comment.trim()) {
-            commentDisplay = `
-                <div class="llm-comment-section">
-                    <p class="comment-label">💬 Σχόλιο:</p>
-                    <p class="comment-text">${data.llm_comment}</p>
-                </div>
-            `;
-        }
+        const serverAuthorName = data.author_name || authorName;
         
         transformedPreview.innerHTML = `
             <div class="transformed-story">
                 <p class="label">Η μετασχηματισμένη ιστορία/το σχόλιό σας:</p>
                 ${emojiDisplay}
                 <p class="story-text">"${data.transformed_text}"</p>
-                ${authorName ? `<p class="author">- ${authorName}</p>` : ''}
-                ${commentDisplay}
+                ${serverAuthorName ? `<p class="author">- ${serverAuthorName}</p>` : ''}
             </div>
         `;
         
