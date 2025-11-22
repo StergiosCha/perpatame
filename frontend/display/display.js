@@ -38,6 +38,9 @@ function connectWebSocket() {
             console.log('🎉 New story with emoji theme:', message.data.emoji_theme_data);
             addStoryCard(message.data, true);
             updateStatsCounter();
+        } else if (message.type === 'clear_display') {
+            console.log('🗑️ Clear display command received from moderator:', message.moderator);
+            clearDisplay();
         }
     };
     
@@ -164,6 +167,19 @@ async function updateStatsCounter() {
     } catch (error) {
         console.error('❌ Error updating stats:', error);
     }
+}
+
+function clearDisplay() {
+    console.log('🗑️ Clearing display...');
+    storiesContainer.innerHTML = `
+        <div class="welcome-message">
+            <div class="welcome-icon">💜</div>
+            <h2>Καλώς ήρθατε! 🌟</h2>
+            <p>Οι ιστορίες/τα σχόλιά σας θα εμφανιστούν εδώ... ✨</p>
+            <div class="welcome-emoji">🎯 💪 🌈 🎉</div>
+        </div>
+    `;
+    updateStatsCounter();
 }
 
 console.log('🚀 Initializing display page...');

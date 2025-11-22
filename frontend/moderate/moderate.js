@@ -12,6 +12,27 @@ moderatorInput.addEventListener('change', (e) => {
     localStorage.setItem('moderatorName', moderatorName);
 });
 
+const clearDisplayBtn = document.getElementById('clear-display-btn');
+clearDisplayBtn.addEventListener('click', () => {
+    if (!moderatorName) {
+        showNotification('Παρακαλώ εισάγετε το όνομά σας πρώτα', 'error');
+        moderatorInput.focus();
+        return;
+    }
+    
+    if (confirm('Είστε σίγουροι ότι θέλετε να καθαρίσετε την οθόνη προβολής;')) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'clear_display',
+                moderator: moderatorName
+            }));
+            showNotification('Η οθόνη προβολής καθαρίστηκε', 'success');
+        } else {
+            showNotification('Δεν υπάρχει σύνδεση. Παρακαλώ περιμένετε...', 'error');
+        }
+    }
+});
+
 let heartbeatTimer;
 
 function connectWebSocket() {

@@ -965,7 +965,19 @@ async def websocket_moderate(websocket: WebSocket):
     await manager.connect(websocket, is_moderator=True)
     try:
         while True:
-            await websocket.receive_text()
+            data = await websocket.receive_text()
+            try:
+                message = json.loads(data)
+                if message.get('type') == 'clear_display':
+                    # Broadcast clear command to all display clients
+                    await manager.broadcast({
+                        "type": "clear_display",
+                        "moderator": message.get('moderator', 'Unknown')
+                    })
+                    print(f"🗑️ Display cleared by moderator: {message.get('moderator', 'Unknown')}")
+            except json.JSONDecodeError:
+                # Handle ping messages
+                pass
     except WebSocketDisconnect:
         manager.disconnect(websocket, is_moderator=True)
 
