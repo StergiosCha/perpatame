@@ -13,6 +13,11 @@ from pydub import AudioSegment
 import json
 import re
 from pathlib import Path
+import asyncio
+from fastapi.responses import FileResponse
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from urllib.parse import urlparse
 
 app = FastAPI(title="Story Transformer")
 
@@ -32,40 +37,129 @@ app.mount("/display", StaticFiles(directory=str(FRONTEND_DIR / "display"), html=
 app.mount("/moderate", StaticFiles(directory=str(FRONTEND_DIR / "moderate"), html=True), name="moderate")
 
 def get_db():
-    conn = sqlite3.connect('stories.db', check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Get database connection - uses PostgreSQL if DATABASE_URL is set, otherwise SQLite"""
+    database_url = os.getenv('DATABASE_URL')
+    
+    if database_url:
+        # PostgreSQL (Render)
+        parsed = urlparse(database_url)
+        conn = psycopg2.connect(
+            database=parsed.path[1:],  # Remove leading /
+            user=parsed.username,
+            password=parsed.password,
+            host=parsed.hostname,
+            port=parsed.port
+        )
+        return conn
+    else:
+        # SQLite (local development)
+        conn = sqlite3.connect('stories.db', check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def is_postgres():
+    """Check if using PostgreSQL"""
+    return os.getenv('DATABASE_URL') is not None
+
+def execute_query(conn, query, params=None):
+    """Execute query that works with both SQLite and PostgreSQL"""
+    is_pg = is_postgres()
+    
+    # Convert SQLite ? placeholders to PostgreSQL %s
+    if is_pg and params:
+        query = query.replace('?', '%s')
+    
+    if is_pg:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        return cursor
+    else:
+        if params:
+            return conn.execute(query, params)
+        else:
+            return conn.execute(query)
+
+def fetchall_dict(conn, cursor):
+    """Fetch all results as dicts"""
+    if is_postgres():
+        return cursor.fetchall()
+    else:
+        return [dict(row) for row in cursor.fetchall()]
+
+def fetchone_dict(conn, cursor):
+    """Fetch one result as dict"""
+    if is_postgres():
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    else:
+        row = cursor.fetchone()
+        return dict(row) if row else None
 
 def init_db():
     conn = get_db()
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS stories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            original_text TEXT NOT NULL,
-            transformed_text TEXT,
-            llm_comment TEXT,
-            author_name TEXT,
-            status TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            moderated_at TIMESTAMP,
-            moderated_by TEXT,
-            emoji_theme TEXT,
-            emoji_data TEXT
-        )
-    ''')
+    is_postgres = os.getenv('DATABASE_URL') is not None
     
-    # Add llm_comment column if it doesn't exist (migration for existing databases)
-    try:
-        # Check if column exists by trying to select it
-        conn.execute('SELECT llm_comment FROM stories LIMIT 1')
-    except sqlite3.OperationalError:
-        # Column doesn't exist, add it
+    if is_postgres:
+        # PostgreSQL
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS stories (
+                id SERIAL PRIMARY KEY,
+                original_text TEXT NOT NULL,
+                transformed_text TEXT,
+                llm_comment TEXT,
+                author_name TEXT,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                moderated_at TIMESTAMP,
+                moderated_by TEXT,
+                emoji_theme TEXT,
+                emoji_data TEXT
+            )
+        ''')
+        
+        # Check if llm_comment column exists
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='stories' AND column_name='llm_comment'
+        """)
+        if not cursor.fetchone():
+            cursor.execute('ALTER TABLE stories ADD COLUMN llm_comment TEXT')
+        
+        conn.commit()
+        cursor.close()
+    else:
+        # SQLite
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS stories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                original_text TEXT NOT NULL,
+                transformed_text TEXT,
+                llm_comment TEXT,
+                author_name TEXT,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                moderated_at TIMESTAMP,
+                moderated_by TEXT,
+                emoji_theme TEXT,
+                emoji_data TEXT
+            )
+        ''')
+        
+        # Add llm_comment column if it doesn't exist
         try:
-            conn.execute('ALTER TABLE stories ADD COLUMN llm_comment TEXT')
-            conn.commit()
-            print("✅ Added llm_comment column to stories table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add llm_comment column: {e}")
+            conn.execute('SELECT llm_comment FROM stories LIMIT 1')
+        except sqlite3.OperationalError:
+            try:
+                conn.execute('ALTER TABLE stories ADD COLUMN llm_comment TEXT')
+                conn.commit()
+                print("✅ Added llm_comment column to stories table")
+            except sqlite3.OperationalError as e:
+                print(f"⚠️ Could not add llm_comment column: {e}")
     
     conn.close()
 
@@ -414,10 +508,14 @@ class StoryTransformer:
         """Get recent approved stories as context for the LLM"""
         try:
             conn = get_db()
-            stories = conn.execute(
-                "SELECT transformed_text, author_name FROM stories WHERE status = 'approved' ORDER BY moderated_at DESC LIMIT ?",
+            cursor = execute_query(
+                conn,
+                "SELECT transformed_text, author_name FROM stories WHERE status = 'approved' ORDER BY COALESCE(moderated_at, created_at) DESC LIMIT ?",
                 (limit,)
-            ).fetchall()
+            )
+            stories = fetchall_dict(conn, cursor)
+            if is_postgres():
+                cursor.close()
             conn.close()
             
             if not stories:
@@ -425,8 +523,8 @@ class StoryTransformer:
             
             context_parts = []
             for story in stories:
-                author = story['author_name'] or 'Ανώνυμος'
-                text = story['transformed_text']
+                author = story.get('author_name') or 'Ανώνυμος'
+                text = story.get('transformed_text', '')
                 context_parts.append(f"- {author}: \"{text}\"")
             
             return "\n".join(context_parts)
@@ -655,6 +753,48 @@ class ModerationAction(BaseModel):
 async def startup_event():
     init_db()
     print("✅ Database initialized")
+    
+    # Start automatic backup task (every 6 hours)
+    asyncio.create_task(periodic_backup())
+
+async def periodic_backup():
+    """Automatically backup database every 6 hours"""
+    while True:
+        await asyncio.sleep(6 * 60 * 60)  # 6 hours
+        try:
+            backup_db()
+            print("✅ Automatic database backup completed")
+        except Exception as e:
+            print(f"⚠️ Backup failed: {e}")
+
+def backup_db():
+    """Create a backup of the database"""
+    try:
+        import shutil
+        db_path = 'stories.db'
+        if not os.path.exists(db_path):
+            print("⚠️ No database file to backup")
+            return None
+        backup_path = f"stories_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        shutil.copy2(db_path, backup_path)
+        print(f"✅ Database backed up to {backup_path}")
+        return backup_path
+    except Exception as e:
+        print(f"❌ Backup error: {e}")
+        raise
+
+@app.get("/api/backup")
+async def download_backup():
+    """Download current database as backup"""
+    try:
+        backup_path = backup_db()
+        return FileResponse(
+            backup_path,
+            media_type='application/octet-stream',
+            filename=f"stories_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
 
 @app.post("/api/transcribe")
 async def transcribe_audio(audio: UploadFile = File(None), file: UploadFile = File(None)):
@@ -775,14 +915,23 @@ async def submit_story(submission: StorySubmission):
         emoji_theme = transformer.get_emoji_theme(submission.text)
         emoji_data_json = json.dumps(emoji_theme)
         
-        cursor = conn.execute(
-            "INSERT INTO stories (original_text, transformed_text, llm_comment, author_name, status, emoji_theme, emoji_data) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+        cursor = execute_query(
+            conn,
+            "INSERT INTO stories (original_text, transformed_text, llm_comment, author_name, status, emoji_theme, emoji_data) VALUES (?, ?, ?, ?, 'pending', ?, ?) RETURNING id" if is_postgres() else "INSERT INTO stories (original_text, transformed_text, llm_comment, author_name, status, emoji_theme, emoji_data) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
             (submission.text, transformed, llm_comment, submission.author_name, emoji_theme['theme'], emoji_data_json)
         )
-        story_id = cursor.lastrowid
-        conn.commit()
+        if is_postgres():
+            story_id = cursor.fetchone()['id']
+            conn.commit()
+            cursor.close()
+        else:
+            story_id = cursor.lastrowid
+            conn.commit()
         
-        story = conn.execute("SELECT * FROM stories WHERE id = ?", (story_id,)).fetchone()
+        cursor = execute_query(conn, "SELECT * FROM stories WHERE id = ?", (story_id,))
+        story = fetchone_dict(conn, cursor)
+        if is_postgres():
+            cursor.close()
         conn.close()
         
         # Notify moderators
@@ -814,33 +963,40 @@ async def submit_story(submission: StorySubmission):
 @app.get("/api/stories")
 async def get_stories(limit: int = 50):
     conn = get_db()
-    stories = conn.execute(
+    cursor = execute_query(
+        conn,
         "SELECT id, transformed_text, llm_comment, author_name, created_at, emoji_theme, emoji_data FROM stories WHERE status = 'approved' ORDER BY created_at DESC LIMIT ?",
         (limit,)
-    ).fetchall()
+    )
+    stories = fetchall_dict(conn, cursor)
+    if is_postgres():
+        cursor.close()
     conn.close()
     
     # Parse emoji data for each story
     result = []
     for story in stories:
-        story_dict = dict(story)
-        if story_dict['emoji_data']:
+        if story.get('emoji_data'):
             try:
-                story_dict['emoji_theme_data'] = json.loads(story_dict['emoji_data'])
+                story['emoji_theme_data'] = json.loads(story['emoji_data'])
             except:
-                story_dict['emoji_theme_data'] = None
-        result.append(story_dict)
+                story['emoji_theme_data'] = None
+        result.append(story)
     
     return result
 
 @app.get("/api/stories/pending")
 async def get_pending_stories():
     conn = get_db()
-    stories = conn.execute(
+    cursor = execute_query(
+        conn,
         "SELECT id, original_text, transformed_text, llm_comment, author_name, created_at FROM stories WHERE status = 'pending' ORDER BY created_at ASC"
-    ).fetchall()
+    )
+    stories = fetchall_dict(conn, cursor)
+    if is_postgres():
+        cursor.close()
     conn.close()
-    return [dict(row) for row in stories]
+    return stories
 
 @app.post("/api/moderate")
 async def moderate_story(action: ModerationAction):
@@ -848,7 +1004,10 @@ async def moderate_story(action: ModerationAction):
         raise HTTPException(status_code=400, detail="Invalid action")
     
     conn = get_db()
-    story = conn.execute("SELECT * FROM stories WHERE id = ?", (action.story_id,)).fetchone()
+    cursor = execute_query(conn, "SELECT * FROM stories WHERE id = ?", (action.story_id,))
+    story = fetchone_dict(conn, cursor)
+    if is_postgres():
+        cursor.close()
     
     if not story:
         conn.close()
@@ -856,13 +1015,19 @@ async def moderate_story(action: ModerationAction):
     
     new_status = 'approved' if action.action == 'approve' else 'rejected'
     
-    conn.execute(
+    cursor = execute_query(
+        conn,
         "UPDATE stories SET status = ?, moderated_at = CURRENT_TIMESTAMP, moderated_by = ? WHERE id = ?",
         (new_status, action.moderator_name, action.story_id)
     )
     conn.commit()
+    if is_postgres():
+        cursor.close()
     
-    updated_story = conn.execute("SELECT * FROM stories WHERE id = ?", (action.story_id,)).fetchone()
+    cursor = execute_query(conn, "SELECT * FROM stories WHERE id = ?", (action.story_id,))
+    updated_story = fetchone_dict(conn, cursor)
+    if is_postgres():
+        cursor.close()
     conn.close()
     
     if action.action == 'approve':
@@ -891,10 +1056,25 @@ async def moderate_story(action: ModerationAction):
 @app.get("/api/stats")
 async def get_stats():
     conn = get_db()
-    total = conn.execute("SELECT COUNT(*) as count FROM stories").fetchone()["count"]
-    approved = conn.execute("SELECT COUNT(*) as count FROM stories WHERE status = 'approved'").fetchone()["count"]
-    pending = conn.execute("SELECT COUNT(*) as count FROM stories WHERE status = 'pending'").fetchone()["count"]
-    rejected = conn.execute("SELECT COUNT(*) as count FROM stories WHERE status = 'rejected'").fetchone()["count"]
+    cursor = execute_query(conn, "SELECT COUNT(*) as count FROM stories")
+    total = fetchone_dict(conn, cursor)['count']
+    if is_postgres():
+        cursor.close()
+    
+    cursor = execute_query(conn, "SELECT COUNT(*) as count FROM stories WHERE status = 'approved'")
+    approved = fetchone_dict(conn, cursor)['count']
+    if is_postgres():
+        cursor.close()
+    
+    cursor = execute_query(conn, "SELECT COUNT(*) as count FROM stories WHERE status = 'pending'")
+    pending = fetchone_dict(conn, cursor)['count']
+    if is_postgres():
+        cursor.close()
+    
+    cursor = execute_query(conn, "SELECT COUNT(*) as count FROM stories WHERE status = 'rejected'")
+    rejected = fetchone_dict(conn, cursor)['count']
+    if is_postgres():
+        cursor.close()
     conn.close()
     
     return {
@@ -908,20 +1088,23 @@ async def get_stats():
 async def get_all_stories():
     """Recovery endpoint: Get ALL stories regardless of status"""
     conn = get_db()
-    stories = conn.execute(
+    cursor = execute_query(
+        conn,
         "SELECT id, original_text, transformed_text, llm_comment, author_name, status, created_at, moderated_at, moderated_by, emoji_theme, emoji_data FROM stories ORDER BY created_at DESC"
-    ).fetchall()
+    )
+    stories = fetchall_dict(conn, cursor)
+    if is_postgres():
+        cursor.close()
     conn.close()
     
     result = []
     for story in stories:
-        story_dict = dict(story)
-        if story_dict.get('emoji_data'):
+        if story.get('emoji_data'):
             try:
-                story_dict['emoji_theme_data'] = json.loads(story_dict['emoji_data'])
+                story['emoji_theme_data'] = json.loads(story['emoji_data'])
             except:
-                story_dict['emoji_theme_data'] = None
-        result.append(story_dict)
+                story['emoji_theme_data'] = None
+        result.append(story)
     
     return result
 
@@ -929,20 +1112,20 @@ async def get_all_stories():
 async def export_stories():
     """Export all stories as JSON for backup"""
     conn = get_db()
-    stories = conn.execute(
-        "SELECT * FROM stories ORDER BY created_at DESC"
-    ).fetchall()
+    cursor = execute_query(conn, "SELECT * FROM stories ORDER BY created_at DESC")
+    stories = fetchall_dict(conn, cursor)
+    if is_postgres():
+        cursor.close()
     conn.close()
     
     result = []
     for story in stories:
-        story_dict = dict(story)
-        if story_dict.get('emoji_data'):
+        if story.get('emoji_data'):
             try:
-                story_dict['emoji_theme_data'] = json.loads(story_dict['emoji_data'])
+                story['emoji_theme_data'] = json.loads(story['emoji_data'])
             except:
                 pass
-        result.append(story_dict)
+        result.append(story)
     
     return {
         "export_date": datetime.now().isoformat(),
