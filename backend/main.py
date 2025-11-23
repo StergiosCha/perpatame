@@ -815,7 +815,7 @@ async def submit_story(submission: StorySubmission):
 async def get_stories(limit: int = 50):
     conn = get_db()
     stories = conn.execute(
-        "SELECT id, transformed_text, llm_comment, author_name, created_at, emoji_theme, emoji_data FROM stories WHERE status = 'approved' ORDER BY moderated_at DESC LIMIT ?",
+        "SELECT id, transformed_text, llm_comment, author_name, created_at, emoji_theme, emoji_data FROM stories WHERE status = 'approved' ORDER BY created_at DESC LIMIT ?",
         (limit,)
     ).fetchall()
     conn.close()
@@ -902,6 +902,52 @@ async def get_stats():
         "approved": approved,
         "pending": pending,
         "rejected": rejected
+    }
+
+@app.get("/api/stories/all")
+async def get_all_stories():
+    """Recovery endpoint: Get ALL stories regardless of status"""
+    conn = get_db()
+    stories = conn.execute(
+        "SELECT id, original_text, transformed_text, llm_comment, author_name, status, created_at, moderated_at, moderated_by, emoji_theme, emoji_data FROM stories ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    
+    result = []
+    for story in stories:
+        story_dict = dict(story)
+        if story_dict.get('emoji_data'):
+            try:
+                story_dict['emoji_theme_data'] = json.loads(story_dict['emoji_data'])
+            except:
+                story_dict['emoji_theme_data'] = None
+        result.append(story_dict)
+    
+    return result
+
+@app.get("/api/stories/export")
+async def export_stories():
+    """Export all stories as JSON for backup"""
+    conn = get_db()
+    stories = conn.execute(
+        "SELECT * FROM stories ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    
+    result = []
+    for story in stories:
+        story_dict = dict(story)
+        if story_dict.get('emoji_data'):
+            try:
+                story_dict['emoji_theme_data'] = json.loads(story_dict['emoji_data'])
+            except:
+                pass
+        result.append(story_dict)
+    
+    return {
+        "export_date": datetime.now().isoformat(),
+        "total_stories": len(result),
+        "stories": result
     }
 
 @app.get("/api/transformation-styles")
